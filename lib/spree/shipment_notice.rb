@@ -2,7 +2,7 @@ module Spree
   class ShipmentNotice
     attr_reader :error
 
-    def initialize(params) 
+    def initialize(params)
       @number   = params[:order_number]
       @tracking = params[:tracking_number]
     end
@@ -13,14 +13,18 @@ module Spree
       handle_error(e)
     end
 
-  private
+    private
+
     def locate
+      @shipment = @order = nil
       if Spree::Config.shipstation_number == :order
-        order = Spree::Order.find_by_number(@number)
-        @shipment = order.try(:shipment)
+        @order = Spree::Order.find_by_number(@number)
+        @shipment = @order.try(:shipments).try(:first)
       else
         @shipment = Spree::Shipment.find_by_number(@number)
+        @order = @shipment.try(:order)
       end
+      @shipment.present? && @order.present?
     end
 
     def update
@@ -31,6 +35,8 @@ module Spree
         @shipment.inventory_units.each &:ship!
         @shipment.touch :shipped_at
       end
+      @order.shipment_state = 'shipped'
+      @order.save!
 
       true
     end

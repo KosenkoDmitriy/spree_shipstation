@@ -23,14 +23,6 @@ module Spree
     def shipnotify
       @notice = notice = Spree::ShipmentNotice.new(params)
 
-      number = params[:order_number]
-      shipment = Spree::Shipment.find_by_number(number)
-      if (shipment)
-        order = shipment.order
-        order.shipment_state = 'shipped'
-        order.save!
-      end
-
       if notice.apply
         @text = 'success'
         respond_to do |format|
