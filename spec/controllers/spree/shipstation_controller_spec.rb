@@ -15,21 +15,94 @@ describe Spree::ShipstationController, type: :controller do
     context "export" do
       let(:shipments) { double(:shipments) }
 
-      before do
-        Spree::Shipment.stub_chain(:exportable, :between).with(Time.new(2013, 12, 31, 8, 0, 0, "+00:00"),
-                                                               Time.new(2014, 1, 13, 23, 0, 0, "+00:00"))
-            .and_return(shipments)
-        shipments.stub_chain(:page, :per).and_return(:some_shipments)
+      describe "record retrieval" do
+        before do
+          Spree::Shipment.stub_chain(:exportable, :between).with(Time.new(2013, 12, 31, 8, 0, 0, "+00:00"),
+                                                                 Time.new(2014, 1, 13, 23, 0, 0, "+00:00"))
+              .and_return(shipments)
+          shipments.stub_chain(:page, :per).and_return(:some_shipments)
 
-        get :export, start_date: '12/31/2013 8:00', end_date: '1/13/2014 23:00', use_route: :spree
+          get :export, start_date: '12/31/2013 8:00', end_date: '1/13/2014 23:00', use_route: :spree
+        end
+
+        specify { expect(response).to be_success }
+        specify { expect(response).to have_http_status(200) }
+        specify { expect(assigns(:shipments)).to eq(:some_shipments) }
       end
 
-      # specify { response.should be_success }
-      specify { expect(response).to be_success }
-      specify { expect(response).to have_http_status(200) }
+      describe "XML output" do
+        render_views
 
-      # specify { assigns(:shipments).should == :some_shipments}
-      specify { expect(assigns(:shipments)).to eq(:some_shipments) }
+        let(:order) { create(:order_ready_to_ship) }
+        let(:shipment) { order.shipments.first }
+
+        before(:each) do
+          order.update_column(:updated_at, "2014-01-07")
+          shipment.update_column(:updated_at, "2014-01-07")
+        end
+
+        it "renders xml including the shipment number as OrderNumber by default" do
+          get :export, start_date: '12/31/2013 8:00', end_date: '1/13/2014 23:00', use_route: :spree
+          expect(response.body).to include("<OrderNumber>#{shipment.number}</OrderNumber>")
+        end
+        it "adds the orderID as custom field 1" do
+          get :export, start_date: '12/31/2013 8:00', end_date: '1/13/2014 23:00', use_route: :spree
+          expect(response.body).to include("<CustomField1>#{order.number}</CustomField1>")
+        end
+
+        context "with custom fields defined on the order" do
+          before(:each) do
+            module ShipstationCustom
+              def shipstation_custom_field_1
+                "custom1"
+              end
+
+              def shipstation_custom_field_2
+                "custom2"
+              end
+
+              def shipstation_custom_field_3
+                "custom3"
+              end
+            end
+
+            Spree::Order.class_eval do
+              include ShipstationCustom
+            end
+          end
+
+          it "honors custom fields defined on the order class" do
+            get :export, start_date: '12/31/2013 8:00', end_date: '1/13/2014 23:00', use_route: :spree
+            expect(response.body).to include("<CustomField1>custom1</CustomField1>")
+            expect(response.body).to include("<CustomField2>custom2</CustomField2>")
+            expect(response.body).to include("<CustomField3>custom3</CustomField3>")
+          end
+        end
+
+        context "with gift wrapping" do
+          before(:each) do
+            module GiftWrapExtension
+              def gift?
+                true
+              end
+
+              def gift_wrapping_message
+                "happy birthday"
+              end
+            end
+
+            Spree::Order.class_eval do
+              include GiftWrapExtension
+            end
+          end
+
+          it "honors custom fields defined on the order class" do
+            get :export, start_date: '12/31/2013 8:00', end_date: '1/13/2014 23:00', use_route: :spree
+            expect(response.body).to include("<Gift>true</Gift>")
+            expect(response.body).to include("<GiftMessage>happy birthday</GiftMessage>")
+          end
+        end
+      end
     end
 
     context "shipnotify" do

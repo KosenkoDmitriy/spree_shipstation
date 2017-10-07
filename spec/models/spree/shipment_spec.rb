@@ -75,10 +75,10 @@ describe Spree::Shipment do
         Spree::Config.send_shipped_email = true
         mail_message = double(Mail::Message)
         expect(Spree::ShipmentMailer).to receive(:shipped_email)
-                                         .with(shipment)
+                                         .with(shipment.id)
                                          .and_return(mail_message)
-        expect(mail_message).to receive(:deliver)
-        # expect(mail_message).to receive(:deliver).with(no_args)
+        expect(mail_message).to receive(:deliver_later)
+
         shipment.ship!
       end
     end
